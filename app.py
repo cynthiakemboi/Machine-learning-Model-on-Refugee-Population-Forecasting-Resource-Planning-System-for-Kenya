@@ -4,25 +4,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import joblib
-
 import pickle
-import torch
-
-# --------------------------------------------------
-# Load preprocessing objects
-# --------------------------------------------------
-
-with open("label_encoders.pkl", "rb") as f:
-    label_encoders = pickle.load(f)
-
-with open("scaler.pkl", "rb") as f:
-    scaler = pickle.load(f)
-
-with open("model_config.pkl", "rb") as f:
-    model_config = pickle.load(f)
 
 # =====================================================
-# Fix 3: Explicitly define CPU support for Cloud environments
+# Device Configuration (Ensures Cloud CPU Compatibility)
 # =====================================================
 device = torch.device("cpu")
 
@@ -102,34 +87,56 @@ class FTTransformer(nn.Module):
 # =====================================================
 @st.cache_resource
 def load_assets():
-    # Load configuration and scaler filenames without spaces
-    label_encoders = joblib.load("label_encoders.pkl")
-    scaler = joblib.load("scaler.pkl")
-    model_config = joblib.load("model_config.pkl")
+    # Robust fallbacks: Attempt to load via joblib first, fall back to pickle if needed
+    try:
+        label_encoders = joblib.load("label_encoders.pkl")
+        scaler = joblib.load("scaler.pkl")
+        model_config = joblib.load("model_config.pkl")
+    except Exception:
+        with open("label_encoders.pkl", "rb") as f:
+            label_encoders = pickle.load(f)
+        with open("scaler.pkl", "rb") as f:
+            scaler = pickle.load(f)
+        with open("model_config.pkl", "rb") as f:
+            model_config = pickle.load(f)
     
-    # Handle potentially missing dropout keys gracefully (fallback)
+    # Map model weights explicitly to CPU
+    state_dict = torch.load("ft_transformer_model.pth", map_location=device)
+    
+    # -----------------------------------------------------------------
+    # FIX: Dynamically detect correct depth directly from saved weights keys!
+    # -----------------------------------------------------------------
+    max_layer_idx = -1
+    for key in state_dict.keys():
+        if key.startswith("transformer.layers."):
+            parts = key.split(".")
+            if len(parts) > 2 and parts[2].isdigit():
+                max_layer_idx = max(max_layer_idx, int(parts[2]))
+                
+    detected_depth = max_layer_idx + 1 if max_layer_idx != -1 else model_config.get('depth', 3)
+    
+    # Handle potentially missing dropout keys gracefully
     attn_dropout = model_config.get('attn_dropout', 0.1)
     ff_dropout = model_config.get('ff_dropout', 0.1)
     
-    # Instantiate the architecture
+    # Instantiate the architecture using the precise parameters and detected depth
     model = FTTransformer(
         cat_cardinalities=model_config['cat_cardinalities'],
         num_features=model_config['num_features'],
         embed_dim=model_config['embed_dim'],
-        depth=model_config['depth'],
+        depth=detected_depth, # <--- Uses self-corrected depth (2) instead of the config mismatch (3)
         heads=model_config['heads'],
         attn_dropout=attn_dropout,
         ff_dropout=ff_dropout
     )
-    # Map weights explicitly to CPU device
-    state_dict = torch.load("ft_transformer_model.pth", map_location=device)
+    
     model.load_state_dict(state_dict)
     model.to(device)
     model.eval()
     
     return model, label_encoders, scaler
 
-# Initialise variables as None
+# Initialize variables to prevent execution crashes
 model, label_encoders, scaler = None, None, None
 
 try:
@@ -138,8 +145,7 @@ try:
 except Exception as e:
     st.error(f"⚠️ Error loading assets: {e}")
     st.warning("Please make sure 'ft_transformer_model.pth', 'model_config.pkl', 'label_encoders.pkl', and 'scaler.pkl' are uploaded to your main repository folder.")
-    # Halt execution so the NameError does not crash the page
-    st.stop()
+    st.stop()  # Gracefully halts execution so the page doesn't throw a NameError
 
 # =====================================================
 # Application UI
@@ -189,7 +195,7 @@ with col2:
         min_age, max_age = 12.0, 17.0
     elif age_range == "18-59":
         min_age, max_age = 18.0, 59.0
-    else: # "60+"
+    else:  # "60+"
         min_age, max_age = 60.0, 100.0
 
     # Build input DataFrame matching Scaler training order
@@ -198,7 +204,7 @@ with col2:
         'origin_in_gho': 1.0 if origin_in_gho else 0.0,
         'min_age': min_age,
         'max_age': max_age,
-        'population': 0.0, # Dummy target placeholder
+        'population': 0.0,  # Dummy target placeholder
         'year': float(year)
     }])
 
@@ -292,4 +298,3 @@ Built using PyTorch FT-Transformer • Streamlit • CRISP-DM
 
 Developed as a Data Science Capstone Project by Team **XG BOOST BUSTERS**.
 """)
-
