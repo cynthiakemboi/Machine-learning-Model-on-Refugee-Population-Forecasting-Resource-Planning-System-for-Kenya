@@ -208,15 +208,16 @@ def load_assets():
     model.to(device)
     model.eval()
     
-    return model, label_encoders, scaler
+    return model, label_encoders, scaler, model_config
 
 # Initialize Global App Assets
 model = None
 label_encoders = None
 scaler = None
+model_config = None
 
 try:
-    model, label_encoders, scaler = load_assets()
+    model, label_encoders, scaler, model_config = load_assets()
     st.success("🤖 FT-Transformer model assets parsed and loaded!")
 except Exception as e:
     st.error(f"⚠️ Error preparing encoders/scaler: {e}")
@@ -224,7 +225,7 @@ except Exception as e:
 # =====================================================
 # App Interface Execution Guard
 # =====================================================
-if label_encoders is not None and model is not None and scaler is not None:
+if label_encoders is not None and model is not None and scaler is not None and model_config is not None:
 
     st.title("🌍 AI-Powered Refugee Population Forecasting System")
     st.write(
@@ -309,7 +310,13 @@ if label_encoders is not None and model is not None and scaler is not None:
                     
                     # 2. Scale Numericals safely via FlexibleScaler
                     scaled_num = scaler.transform(raw_numerical)
-                    scaled_num_features = np.delete(scaled_num, 4, axis=1)
+                    
+                    # Dynamically adjust features to perfectly match model config
+                    expected_num_features = model_config.get('num_features', 6)
+                    if scaled_num.shape[1] > expected_num_features:
+                        scaled_num_features = np.delete(scaled_num, 4, axis=1)
+                    else:
+                        scaled_num_features = scaled_num
 
                     # 3. Convert to Tensors
                     tensor_cat = torch.tensor(encoded_cat.values, dtype=torch.long).to(device)
