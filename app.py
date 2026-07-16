@@ -91,7 +91,7 @@ def load_assets():
     scaler = joblib.load("scaler.pkl")
     model_config = joblib.load("model_config.pkl")
     
-    # Handle potentially missing dropout keys gracefully (fallback)
+    # Safe fallback using .get() to prevent KeyError
     attn_dropout = model_config.get('attn_dropout', 0.1)
     ff_dropout = model_config.get('ff_dropout', 0.1)
     
