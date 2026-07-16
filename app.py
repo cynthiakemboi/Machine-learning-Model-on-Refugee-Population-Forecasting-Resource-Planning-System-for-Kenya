@@ -1,3 +1,21 @@
+This is an IndexError happening right when the app tries to access your categorical columns inside label_encoders:
+
+Python
+valid_origins = list(label_encoders['origin_location_code'].classes_)
+This error usually happens because of one of two things:
+
+The format of label_encoders.pkl: Instead of being a standard Python dictionary where keys are column names (e.g., 'origin_location_code'), it was saved as a list of encoders, a Pandas Series, or a customized object. When you try to key into it using a string, Python throws an index error.
+
+Missing Key/Empty Classes: The file might have been saved in a different order or format during your model training pipeline.
+
+The Self-Diagnostic Fix 🛠️
+Instead of guessing how the object was saved, let's update your app.py with a diagnostic loader.
+
+This script will automatically detect the type of your label_encoders object (whether it is a dictionary, a list, or a dataframe) and extract the encoders safely. If something goes wrong, it will print exactly what is inside your file right on the web screen so we can fix it instantly.
+
+Replace your app.py with this robust version:
+
+Python
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,13 +25,10 @@ import joblib
 import pickle
 
 # =====================================================
-# Device Configuration (Ensures Cloud CPU Compatibility)
+# Device Configuration
 # =====================================================
 device = torch.device("cpu")
 
-# =====================================================
-# Page Configuration
-# =====================================================
 st.set_page_config(
     page_title="Refugee Population Forecasting System",
     page_icon="🌍",
@@ -24,7 +39,6 @@ st.set_page_config(
 # Recreate the FT-Transformer PyTorch Architecture
 # =====================================================
 class NumericalTokenizer(nn.Module):
-    """Projections of raw scalars to token embeddings of dimension d"""
     def __init__(self, num_features, embed_dim):
         super().__init__()
         self.weights = nn.Parameter(torch.Tensor(num_features, embed_dim))
@@ -66,7 +80,6 @@ class FTTransformer(nn.Module):
         
     def forward(self, x_cat, x_num):
         batch_size = x_cat.size(0)
-        
         cat_tokens = [emb(x_cat[:, i]) for i, emb in enumerate(self.cat_embeddings)]
         if cat_tokens:
             cat_tokens = torch.stack(cat_tokens, dim=1)
@@ -83,26 +96,49 @@ class FTTransformer(nn.Module):
         return self.mlp_head(flat_out)
 
 # =====================================================
-# Load Saved Weights & Configurations Safely
+# Safe Loaders & Diagnostic Diagnostics
 # =====================================================
 @st.cache_resource
 def load_assets():
-    # Attempt to load using standard pickle first, fallback to joblib
+    # 1. Load label encoders safely
     try:
         with open("label_encoders.pkl", "rb") as f:
-            label_encoders = pickle.load(f)
+            raw_encoders = pickle.load(f)
+    except Exception:
+        raw_encoders = joblib.load("label_encoders.pkl")
+        
+    # Standardize label_encoders to a clean dictionary
+    label_encoders = {}
+    
+    if isinstance(raw_encoders, dict):
+        label_encoders = raw_encoders
+    elif isinstance(raw_encoders, (list, tuple)):
+        # If it was saved as a list, attempt to map key names by their order
+        # Expected order: origin_location_code, population_group, gender, age_range
+        expected_keys = ['origin_location_code', 'population_group', 'gender', 'age_range']
+        for i, encoder in enumerate(raw_encoders):
+            if i < len(expected_keys):
+                label_encoders[expected_keys[i]] = encoder
+    else:
+        # If it is a dataframe or Series or other custom object
+        raise TypeError(f"Loaded encoders are of unsupported type: {type(raw_encoders)}")
+
+    # 2. Load Scaler
+    try:
         with open("scaler.pkl", "rb") as f:
             scaler = pickle.load(f)
+    except Exception:
+        scaler = joblib.load("scaler.pkl")
+
+    # 3. Load Model Config
+    try:
         with open("model_config.pkl", "rb") as f:
             model_config = pickle.load(f)
     except Exception:
-        label_encoders = joblib.load("label_encoders.pkl")
-        scaler = joblib.load("scaler.pkl")
         model_config = joblib.load("model_config.pkl")
-    
+
     state_dict = torch.load("ft_transformer_model.pth", map_location=device)
     
-    # Dynamically detect correct depth directly from saved weights keys
     max_layer_idx = -1
     for key in state_dict.keys():
         if key.startswith("transformer.layers."):
@@ -131,41 +167,55 @@ def load_assets():
     
     return model, label_encoders, scaler
 
-# Initialize global variables as None to guarantee they are defined
+# Initialize Global App Assets
 model = None
 label_encoders = None
 scaler = None
 
 try:
     model, label_encoders, scaler = load_assets()
-    st.success("🤖 State-of-the-art FT-Transformer Model loaded successfully on CPU!")
+    st.success("🤖 FT-Transformer model assets parsed and loaded!")
 except Exception as e:
-    st.error(f"⚠️ Error loading assets: {e}")
-    st.warning("Please verify that 'ft_transformer_model.pth', 'model_config.pkl', 'label_encoders.pkl', and 'scaler.pkl' are in your main GitHub repository directory.")
+    st.error(f"⚠️ Error preparing encoders: {e}")
+    # Run interactive diagnostic display so we can inspect what was inside label_encoders.pkl
+    try:
+        with open("label_encoders.pkl", "rb") as f:
+            raw_data = pickle.load(f)
+        st.write("🔧 **Diagnostic Data Inspection of 'label_encoders.pkl':**")
+        st.write(f"- Object Type: `{type(raw_data)}`")
+        if isinstance(raw_data, dict):
+            st.write(f"- Dictionary Keys: `{list(raw_data.keys())}`")
+        elif isinstance(raw_data, (list, tuple)):
+            st.write(f"- List Length: `{len(raw_data)}` elements")
+            for idx, item in enumerate(raw_data):
+                st.write(f"  - Element [{idx}] Type: `{type(item)}`")
+    except Exception as diagnostic_err:
+        st.write(f"Could not run diagnostic check: {diagnostic_err}")
 
 # =====================================================
-# Safe Application Execution Guard
+# App Interface Execution Guard
 # =====================================================
 if label_encoders is not None and model is not None and scaler is not None:
 
-    # =====================================================
-    # Application UI
-    # =====================================================
     st.title("🌍 AI-Powered Refugee Population Forecasting System")
     st.write(
         """
         This dashboard leverages an advanced **Feature Tokenizer Transformer (FT-Transformer)** deep learning network 
-        to forecast localized refugee population trends in Kenya and translate predicted figures into immediate resource plans.
+        to forecast localized refugee population trends in Kenya.
         """
     )
 
     col1, col2 = st.columns([1, 1.2])
 
-    # Extract valid categorical options directly from your trained encoders
-    valid_origins = list(label_encoders['origin_location_code'].classes_)
-    valid_pop_groups = list(label_encoders['population_group'].classes_)
-    valid_genders = list(label_encoders['gender'].classes_)
-    valid_age_ranges = list(label_encoders['age_range'].classes_)
+    # Extract valid options using fallback keys if some aren't present
+    try:
+        valid_origins = list(label_encoders.get('origin_location_code', list(label_encoders.values())[0]).classes_)
+        valid_pop_groups = list(label_encoders.get('population_group', list(label_encoders.values())[1]).classes_)
+        valid_genders = list(label_encoders.get('gender', list(label_encoders.values())[2]).classes_)
+        valid_age_ranges = list(label_encoders.get('age_range', list(label_encoders.values())[3]).classes_)
+    except Exception as parse_err:
+        st.error(f"Failed parsing classes from label encoders: {parse_err}")
+        st.stop()
 
     with col1:
         st.subheader("📋 Demographic Parameters")
@@ -187,7 +237,6 @@ if label_encoders is not None and model is not None and scaler is not None:
     with col2:
         st.subheader("📊 Model Inference & Resource Forecasting")
         
-        # Calculate age boundaries dynamically
         if age_range == "0-4":
             min_age, max_age = 0.0, 4.0
         elif age_range == "5-11":
@@ -196,10 +245,9 @@ if label_encoders is not None and model is not None and scaler is not None:
             min_age, max_age = 12.0, 17.0
         elif age_range == "18-59":
             min_age, max_age = 18.0, 59.0
-        else:  # "60+"
+        else:
             min_age, max_age = 60.0, 100.0
 
-        # Build input DataFrames
         raw_numerical = pd.DataFrame([{
             'origin_has_hrp': 1.0 if origin_has_hrp else 0.0,
             'origin_in_gho': 1.0 if origin_in_gho else 0.0,
@@ -219,17 +267,20 @@ if label_encoders is not None and model is not None and scaler is not None:
         st.markdown("**Processed Input Vector:**")
         st.write(pd.concat([raw_categorical, raw_numerical.drop(columns=['population'])], axis=1))
 
-        # Initialize session state for prediction so it is persistent
         if "predicted_pop" not in st.session_state:
             st.session_state.predicted_pop = None
 
         if st.button("🔮 Run Deep Learning Inference"):
             with st.spinner("Calculating predictions..."):
                 try:
-                    # 1. Encode Categoricals
+                    # 1. Encode Categoricals safely
                     encoded_cat = raw_categorical.copy()
-                    for col in ['origin_location_code', 'population_group', 'gender', 'age_range']:
-                        encoded_cat[col] = label_encoders[col].transform(raw_categorical[col])
+                    
+                    # Target mapping keys or fallbacks based on loaded keys
+                    cat_cols = ['origin_location_code', 'population_group', 'gender', 'age_range']
+                    for idx, col in enumerate(cat_cols):
+                        encoder = label_encoders.get(col, list(label_encoders.values())[idx])
+                        encoded_cat[col] = encoder.transform(raw_categorical[col])
                     
                     # 2. Scale Numericals
                     scaled_num = scaler.transform(raw_numerical)
@@ -247,7 +298,6 @@ if label_encoders is not None and model is not None and scaler is not None:
                 except Exception as e:
                     st.error(f"Prediction Pipeline Failed: {e}")
 
-        # Display prediction results if present
         if st.session_state.predicted_pop is not None:
             predicted_pop = st.session_state.predicted_pop
             
@@ -257,9 +307,6 @@ if label_encoders is not None and model is not None and scaler is not None:
                 value=f"{predicted_pop:,} individuals"
             )
 
-            # =================================================
-            # Operational Resource Metrics
-            # =================================================
             st.markdown("---")
             st.subheader("📦 Projected Resource Requirements")
             
@@ -288,18 +335,11 @@ if label_encoders is not None and model is not None and scaler is not None:
             💡 **Strategic Guidance:** These estimates map population counts to standard WHO, WFP, and Sphere Handbook humanitarian indicators to streamline camp deployment planning.
             """)
 
-    # =====================================================
-    # Application Footer
-    # =====================================================
     st.markdown("---")
     st.caption("""
     🌍 **AI-Powered Refugee Population Forecasting and Humanitarian Resource Planning System for Kenya**
-
-    Built using PyTorch FT-Transformer • Streamlit • CRISP-DM
-
+    
     Developed as a Data Science Capstone Project by Team **XG BOOST BUSTERS**.
     """)
-
 else:
-    # If files are missing, show a beautiful standby message instead of crashing
-    st.info("🕒 Standing by... Once the model assets load successfully, the interactive planning panel will appear here.")
+    st.info("🕒 Check diagnostic instructions above to resolve the file formats.")ll appear here.")
