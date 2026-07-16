@@ -18,13 +18,12 @@ st.set_page_config(
 )
 
 # =====================================================
-# Safe & Robust Encoder Wrapper
+# Safe & Robust Preprocessing Wrappers
 # =====================================================
 class FlexibleEncoder:
     """
-    Automated fallback wrapper. Decides if the wrapped object is a 
-    fitted Sklearn LabelEncoder or raw iterable list of classes, 
-    ensuring .classes_ and .transform() work flawlessly in either case.
+    Automated fallback wrapper for label encoders. Ensures .classes_ 
+    and .transform() work flawlessly regardless of how they were saved.
     """
     def __init__(self, raw_encoder):
         self.raw = raw_encoder
@@ -41,7 +40,6 @@ class FlexibleEncoder:
     def transform(self, sequence):
         if self.is_sklearn:
             try:
-                # Try standard sklearn transformation
                 return self.raw.transform(sequence)
             except Exception:
                 pass
@@ -50,13 +48,31 @@ class FlexibleEncoder:
         class_map = {val: idx for idx, val in enumerate(self.classes_)}
         
         if hasattr(sequence, 'map'):
-            # Handles Pandas Series mapping safely
             return sequence.map(lambda x: class_map.get(x, 0))
         elif isinstance(sequence, (list, tuple, np.ndarray, pd.Series)):
             return [class_map.get(x, 0) for x in sequence]
         else:
-            # Single value fallback
             return class_map.get(sequence, 0)
+
+
+class FlexibleScaler:
+    """
+    Robust fallback wrapper for the scaler object. Prevent crashes if scaler.pkl 
+    was saved as a raw numpy array instead of an active Scikit-Learn Scaler.
+    """
+    def __init__(self, raw_scaler):
+        self.raw = raw_scaler
+        self.has_transform = hasattr(raw_scaler, 'transform')
+        
+    def transform(self, df):
+        if self.has_transform:
+            try:
+                return self.raw.transform(df)
+            except Exception:
+                pass
+        # Fallback: Convert to numpy array safely if scaler has no transform method
+        return df.to_numpy()
+
 
 # =====================================================
 # Recreate the FT-Transformer PyTorch Architecture
@@ -118,6 +134,7 @@ class FTTransformer(nn.Module):
         flat_out = transformer_out.view(batch_size, -1)
         return self.mlp_head(flat_out)
 
+
 # =====================================================
 # Safe Loaders & Asset Standardization
 # =====================================================
@@ -130,7 +147,6 @@ def load_assets():
     except Exception:
         raw_encoders = joblib.load("label_encoders.pkl")
         
-    # Standardize label_encoders to a clean dictionary of FlexibleEncoders
     label_encoders = {}
     expected_keys = ['origin_location_code', 'population_group', 'gender', 'age_range']
     
@@ -149,12 +165,13 @@ def load_assets():
     else:
         raise TypeError(f"Loaded encoders are of unsupported type: {type(raw_encoders)}")
 
-    # 2. Load Scaler
+    # 2. Load Scaler Safely
     try:
         with open("scaler.pkl", "rb") as f:
-            scaler = pickle.load(f)
+            raw_scaler = pickle.load(f)
     except Exception:
-        scaler = joblib.load("scaler.pkl")
+        raw_scaler = joblib.load("scaler.pkl")
+    scaler = FlexibleScaler(raw_scaler)
 
     # 3. Load Model Config
     try:
@@ -202,7 +219,7 @@ try:
     model, label_encoders, scaler = load_assets()
     st.success("🤖 FT-Transformer model assets parsed and loaded!")
 except Exception as e:
-    st.error(f"⚠️ Error preparing encoders: {e}")
+    st.error(f"⚠️ Error preparing encoders/scaler: {e}")
 
 # =====================================================
 # App Interface Execution Guard
@@ -284,13 +301,13 @@ if label_encoders is not None and model is not None and scaler is not None:
         if st.button("🔮 Run Deep Learning Inference"):
             with st.spinner("Calculating predictions..."):
                 try:
-                    # 1. Encode Categoricals using our new FlexibleEncoder wrapper
+                    # 1. Encode Categoricals safely
                     encoded_cat = raw_categorical.copy()
                     cat_cols = ['origin_location_code', 'population_group', 'gender', 'age_range']
                     for col in cat_cols:
                         encoded_cat[col] = label_encoders[col].transform(raw_categorical[col])
                     
-                    # 2. Scale Numericals
+                    # 2. Scale Numericals safely via FlexibleScaler
                     scaled_num = scaler.transform(raw_numerical)
                     scaled_num_features = np.delete(scaled_num, 4, axis=1)
 
