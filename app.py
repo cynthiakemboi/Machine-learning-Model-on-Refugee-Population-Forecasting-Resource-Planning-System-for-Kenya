@@ -200,4 +200,74 @@ with col2:
                 encoded_cat[col] = label_encoders[col].transform(raw_categorical[col])
             
             # 2. Scale Numericals using loaded Scaler
-            scaled_num = scaler.transform(raw_numerical)
+            scaled_num = scaler.transform(raw_numerical)Remove target 'population' index from numeric array to align with feature shape
+            scaled_num_features = np.delete(scaled_num, 4, axis=1)
+
+            # 3. Convert to PyTorch Tensors
+            tensor_cat = torch.tensor(encoded_cat.values, dtype=torch.long).to(device)
+            tensor_num = torch.tensor(scaled_num_features, dtype=torch.float32).to(device)
+
+            # 4. Model Prediction
+            with torch.no_grad():
+                pred_raw = model(tensor_cat, tensor_num).item()
+            
+            # Force non-negativity
+            predicted_pop = max(0, int(round(pred_raw)))
+
+            # Display Target Forecast Result
+            st.metric(
+                label="Predicted Refugee Population Segment", 
+                value=f"{predicted_pop:,} individuals"
+            )
+
+            # =================================================
+            # Fix 4: Enhanced Operational Resource Metrics
+            # =================================================
+            st.markdown("---")
+            st.subheader("📦 Projected Resource Requirements")
+            
+            # Operational Planning Constants
+            household_size = 5 
+            daily_ration_kg = 0.45 
+            
+            # Calculations
+            estimated_households = int(predicted_pop / household_size)
+            daily_food_needed = predicted_pop * daily_ration_kg
+            monthly_food_tonnes = (daily_food_needed * 30.4) / 1000
+            
+            # Enhanced Indicator Calculations
+            health_kits = predicted_pop
+            school_children = int(predicted_pop * 0.42)
+            water_liters = predicted_pop * 15
+
+            # Grid layout for advanced planning metrics
+            m_col1, m_col2, m_col3 = st.columns(3)
+            with m_col1:
+                st.metric(label="Estimated Households (Shelters)", value=f"{estimated_households:,}")
+                st.metric(label="School-age Children (42% Est.)", value=f"{school_children:,}")
+            with m_col2:
+                st.metric(label="Monthly Food Target", value=f"{monthly_food_tonnes:.2f} MT")
+                st.metric(label="Health Kits Needed", value=f"{health_kits:,}")
+            with m_col3:
+                st.metric(label="Daily Water Requirement", value=f"{water_liters:,} L")
+
+            st.info("""
+            💡 **Strategic Guidance:** These estimates map population counts to standard WHO, WFP, and Sphere Handbook humanitarian indicators to streamline camp deployment planning.
+            """)
+
+        except Exception as e:
+            st.error(f"Prediction Pipeline Failed: {e}")
+            st.info("Please verify your input mappings align with scaler configurations.")
+
+# =====================================================
+# Fix 5: Application Footer
+# =====================================================
+st.markdown("---")
+st.caption("""
+🌍 **AI-Powered Refugee Population Forecasting and Humanitarian Resource Planning System for Kenya**
+
+Built using PyTorch FT-Transformer • Streamlit • CRISP-DM
+
+Developed as a Data Science Capstone Project by Team **XG BOOST BUSTERS**.
+"""
+)
