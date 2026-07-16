@@ -79,7 +79,7 @@ class FTTransformer(nn.Module):
         return self.mlp_head(flat_out)
 
 # =====================================================
-# Safe Loaders & Diagnostic Diagnostics
+# Safe Loaders & Diagnostics
 # =====================================================
 @st.cache_resource
 def load_assets():
@@ -96,14 +96,12 @@ def load_assets():
     if isinstance(raw_encoders, dict):
         label_encoders = raw_encoders
     elif isinstance(raw_encoders, (list, tuple)):
-        # If it was saved as a list, attempt to map key names by their order
-        # Expected order: origin_location_code, population_group, gender, age_range
+        # If it was saved as a list, map key names by their order
         expected_keys = ['origin_location_code', 'population_group', 'gender', 'age_range']
         for i, encoder in enumerate(raw_encoders):
             if i < len(expected_keys):
                 label_encoders[expected_keys[i]] = encoder
     else:
-        # If it is a dataframe or Series or other custom object
         raise TypeError(f"Loaded encoders are of unsupported type: {type(raw_encoders)}")
 
     # 2. Load Scaler
@@ -325,4 +323,4 @@ if label_encoders is not None and model is not None and scaler is not None:
     Developed as a Data Science Capstone Project by Team **XG BOOST BUSTERS**.
     """)
 else:
-    st.info("🕒 Check diagnostic instructions above to resolve the file formats.")ll appear here.")
+    st.info("🕒 Check diagnostic instructions above to resolve the file formats.")
