@@ -95,8 +95,8 @@ def load_assets():
     
     if isinstance(raw_encoders, dict):
         label_encoders = raw_encoders
-    elif isinstance(raw_encoders, (list, tuple)):
-        # If it was saved as a list, map key names by their order
+    elif isinstance(raw_encoders, (list, tuple, np.ndarray)):
+        # Treat lists, tuples, and numpy arrays equally!
         expected_keys = ['origin_location_code', 'population_group', 'gender', 'age_range']
         for i, encoder in enumerate(raw_encoders):
             if i < len(expected_keys):
@@ -166,8 +166,8 @@ except Exception as e:
         st.write(f"- Object Type: `{type(raw_data)}`")
         if isinstance(raw_data, dict):
             st.write(f"- Dictionary Keys: `{list(raw_data.keys())}`")
-        elif isinstance(raw_data, (list, tuple)):
-            st.write(f"- List Length: `{len(raw_data)}` elements")
+        elif isinstance(raw_data, (list, tuple, np.ndarray)):
+            st.write(f"- Array Length: `{len(raw_data)}` elements")
             for idx, item in enumerate(raw_data):
                 st.write(f"  - Element [{idx}] Type: `{type(item)}`")
     except Exception as diagnostic_err:
