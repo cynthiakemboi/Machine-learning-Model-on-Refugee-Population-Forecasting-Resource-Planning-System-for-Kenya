@@ -559,27 +559,32 @@ with col2:
         """)
 
 # =====================================================
-# Historical Trends Visualization Section
+# Historical Trends Visualization Section (2022-2025 Focus)
 # =====================================================
 if history_loaded:
     st.markdown("---")
-    st.subheader("📈 Historical Population Trend Analysis (2001 - 2025)")
+    st.subheader("📈 Historical Population Trend Analysis (2022 - 2025)")
     
+    # Filter for active historical records from 2022 onwards to clean up empty layout sections
     filtered_df = history_df[
         (history_df["origin_location_code"] == origin) &
         (history_df["gender"] == gender) &
-        (history_df["age_range"] == age_range)
+        (history_df["age_range"] == age_range) &
+        (history_df["year"] >= 2022)
     ]
     
     if not filtered_df.empty:
         yearly_trend = filtered_df.groupby("year")["population"].sum().reset_index()
         yearly_trend = yearly_trend.sort_values("year")
         
+        # Format the year cleanly so it displays without decimal dots on the chart axis
+        yearly_trend["year"] = yearly_trend["year"].astype(str)
         chart_data = yearly_trend.set_index("year")
+        
         st.line_chart(chart_data, y="population", width="stretch")
-        st.caption(f"📉 *Showing historical population of {gender} cohorts aged {age_range} from {origin} residing in Kenya.*")
+        st.caption(f"📉 *Showing recorded historical population timeline from 2022 to 2025 for {gender} cohorts aged {age_range} from {origin}.*")
     else:
-        st.info("ℹ️ No historical timeline trend records exist to plot for this specific country, age, and gender combination.")
+        st.info("ℹ️ No historical population records exist in the database from 2022-2025 for this specific parameter combination.")
 
 # =====================================================
 # Custom Styled Sticky Footer
@@ -602,7 +607,7 @@ st.markdown(
     }
     </style>
     <div class="footer">
-        <p>🌍 <b>Refugee Population Forecasting & Resource Planning System</b> | Developed by Team <b>XG BOOST BUSTERS</b> © 2026</p>
+        <p>🌍 <b>Refugee Population Forecasting & Resource Planning System</b> | Developed as a Data Science Capstone Project by Team <b>XG BOOST BUSTERS</b> © 2026</p>
     </div>
     """,
     unsafe_allow_html=True
