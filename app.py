@@ -110,8 +110,8 @@ def safe_transform_categorical(encoder_obj, val):
 
 # =====================================================
 # Age-cohort-specific resource planning profiles
-# (WHO / UNHCR / Sphere-Handbook aligned)
 # =====================================================
+#
 AGE_COHORT_PROFILES = {
     "0-4": {
         "school_age": False,
@@ -173,7 +173,6 @@ def load_historical_data():
 
 
 def load_model_metrics():
-    """Reads backtested metrics if model_metrics.json exists."""
     if os.path.exists("model_metrics.json"):
         try:
             with open("model_metrics.json") as f:
@@ -288,36 +287,14 @@ with st.sidebar:
     metrics, real_metrics_found = load_model_metrics()
     
     if real_metrics_found:
-        st.metric(
-            label="R² Score (Variance Explained)", 
-            value=f"{metrics.get('r2', 0.912):.3f}"
-        )
-        st.metric(
-            label="Mean Absolute Error (MAE)", 
-            value=f"{metrics.get('mae', 142.5):,.1f} individuals"
-        )
-        st.metric(
-            label="Root Mean Squared Error (RMSE)", 
-            value=f"{metrics.get('rmse', 184.2):,.1f} individuals",
-            help="RMSE penalizes larger prediction deviations heavier than MAE, essential for capacity safety buffer planning."
-        )
+        st.metric(label="R² Score (Variance Explained)", value=f"{metrics.get('r2', 0.912):.3f}")
+        st.metric(label="Mean Absolute Error (MAE)", value=f"{metrics.get('mae', 142.5):,.1f} individuals")
+        st.metric(label="Root Mean Squared Error (RMSE)", value=f"{metrics.get('rmse', 184.2):,.1f} individuals")
     else:
         st.info("ℹ️ Showing Model Validation Baseline metrics.")
-        st.metric(
-            label="R² Score (Variance Explained)", 
-            value="0.912",
-            help="Determined during training validation on the test cohort split."
-        )
-        st.metric(
-            label="Mean Absolute Error (MAE)", 
-            value="142.5 individuals",
-            help="Average absolute discrepancy between predicted and actual population sizes."
-        )
-        st.metric(
-            label="Root Mean Squared Error (RMSE)", 
-            value="184.2 individuals",
-            help="Penalizes larger prediction deviations heavier than MAE, helping plan backup/buffer resources."
-        )
+        st.metric(label="R² Score (Variance Explained)", value="0.912")
+        st.metric(label="Mean Absolute Error (MAE)", value="142.5 individuals")
+        st.metric(label="Root Mean Squared Error (RMSE)", value="184.2 individuals")
 
 
 # =====================================================
@@ -328,39 +305,9 @@ st.title("🌍 AI-Powered Refugee Population Forecasting System")
 st.markdown("""
 ### **Project Objective**
 To provide humanitarian organizations with a proactive tool for estimating localized refugee demographic trends in Kenya and automatically calculating downstream resource allocation.
-
-This dashboard uses a trained **Feature Tokenizer Transformer (FT-Transformer)** deep learning model to forecast refugee population trends in Kenya and project crucial logistics requirements like daily water, food distribution, and emergency housing.
 """)
 
 st.info("💡 **System Ready** — Select your forecast parameters below and click **Generate Forecast**.")
-st.markdown("---")
-
-
-# =====================================================
-# App Tutorial & Quick Terminology Glossary
-# =====================================================
-with st.expander("📖 User Manual & Quick Terminology Glossary", expanded=False):
-    t_col1, t_col2 = st.columns([1, 1.2])
-    with t_col1:
-        st.markdown("""
-        ### **How to generate forecasts:**
-        1. **Select Demographic Parameters:** Pick the Country of Origin, Population Group, Gender, and Age band.
-        2. **Automatic Baseline Verification:** The system automatically references the *verified historical database* to fetch the most recent starting population for that cohort.
-        3. **Specify Forecast Timeline:** Set the Target Forecast Year (2026–2030) using the slider.
-        4. **Refine Geopolitical Controls:** Toggle administrative factors like **HRP** and **GHO** if conditions are changing.
-        5. **Run Prediction:** Click **🔮 Generate Forecast** to query the deep learning model.
-        """)
-    with t_col2:
-        st.markdown("""
-        ### **📌 Terminology Quick Reference**
-        * 🔍 **ASY (Asylum Seekers):** Individuals whose requests for international asylum protective status inside Kenya have been officially filed but are still awaiting formal decision/resolution.
-        * 📋 **Baseline Population:** The starting count or historically recorded size of this specific demographic cohort. The model uses this baseline to calculate relative future growth or contraction.
-        * 🛡️ **HRP (Humanitarian Response Plan):** An active, coordinated UN-led emergency strategy launched inside a crisis country to target and fund life-saving assistance programs.
-        * 🌐 **GHO (Global Humanitarian Overview):** A designation indicating whether a country has been prioritized inside the UN's shared global funding appeal due to crisis severity.
-        """)
-        st.markdown("---")
-        st.caption("💡 *You can also hover over the small question mark icons **(?)** next to each input field below to read these descriptions.*")
-
 st.markdown("---")
 
 col1, col2 = st.columns([1, 1.2])
@@ -373,65 +320,25 @@ valid_age_ranges = get_classes_safely(label_encoders['age_range'])
 with col1:
     st.subheader("📋 Demographic Parameters")
     
-    origin = st.selectbox(
-        "Country of Origin", 
-        options=valid_origins,
-        help="The home country or country of origin of the displaced population cohort."
-    )
-    population_group = st.selectbox(
-        "Population Group Type", 
-        options=valid_pop_groups,
-        help="The administrative classification of the group:\n\n"
-             "• ASY: Asylum Seekers (individuals whose request for sanctuary has yet to be processed).\n"
-             "• REF: Registered Refugees (individuals officially granted protected status)."
-    )
-    gender = st.selectbox(
-        "Gender Cohort", 
-        options=valid_genders,
-        help="Gender categorization of the demographic cohort."
-    )
-    age_range = st.selectbox(
-        "Age Range", 
-        options=valid_age_ranges,
-        help="Age group cohort of the population (e.g., 0-4, 5-11, etc.)."
-    )
+    origin = st.selectbox("Country of Origin", options=valid_origins)
+    population_group = st.selectbox("Population Group Type", options=valid_pop_groups)
+    gender = st.selectbox("Gender Cohort", options=valid_genders)
+    age_range = st.selectbox("Age Range", options=valid_age_ranges)
 
     st.subheader("⏱️ Forecasting Timeline")
-    year = st.slider(
-        "Target Forecast Year", 
-        min_value=2026, 
-        max_value=2030, 
-        value=2026,
-        help="The future calendar year you wish to project for (2026-2030)."
-    )
+    year = st.slider("Target Forecast Year", min_value=2026, max_value=2030, value=2026)
 
     st.subheader("💡 Geopolitical Indicators")
-    origin_has_hrp = st.checkbox(
-        "Origin country has active Humanitarian Response Plan (HRP)", 
-        value=True,
-        help="HRP (Humanitarian Response Plan): An active, strategic, and coordinated emergency plan launched by the UN and partners inside the origin country to address critical vulnerabilities."
-    )
-    origin_in_gho = st.checkbox(
-        "Included in Global Humanitarian Overview (GHO)", 
-        value=True,
-        help="GHO (Global Humanitarian Overview): Indicates if the origin country is officially categorized under the UN's shared global humanitarian funding appeal due to chronic crisis severity."
-    )
-    asylum_has_hrp = st.checkbox(
-        "Kenya has active Humanitarian Response Plan (HRP)", 
-        value=True,
-        help="Indicates if Kenya has an active HRP program deployed."
-    )
-    asylum_in_gho = st.checkbox(
-        "Kenya included in Global Humanitarian Overview (GHO)", 
-        value=True,
-        help="Indicates if Kenya is part of the current GHO appeal."
-    )
+    origin_has_hrp = st.checkbox("Origin country has active Humanitarian Response Plan (HRP)", value=True)
+    origin_in_gho = st.checkbox("Included in Global Humanitarian Overview (GHO)", value=True)
+    asylum_has_hrp = st.checkbox("Kenya has active Humanitarian Response Plan (HRP)", value=True)
+    asylum_in_gho = st.checkbox("Kenya included in Global Humanitarian Overview (GHO)", value=True)
 
 with col2:
     st.subheader("📊 Dynamic Baseline Lookup")
     
-    # Secure baseline calculation: locate the latest year's recorded population inside the dataset
-    baseline_pop = 1000  # Default safe fall-back value
+    baseline_pop = 1000  # Default fallback
+    baseline_year = 2025  # Default fallback year
     is_lookup_verified = False
     
     if history_loaded and (history_df is not None):
@@ -443,16 +350,13 @@ with col2:
         ]
         
         if not matched_cohorts.empty:
-            # Anchor to the absolute most recent year's data recorded in Kenya_Refugee.csv
             latest_record = matched_cohorts.sort_values(by="year", ascending=False).iloc[0]
             baseline_pop = int(latest_record["population"])
             baseline_year = int(latest_record["year"])
             is_lookup_verified = True
     
-    # Display the found verification metrics transparently
     if is_lookup_verified:
         st.success(f"🔒 **Verified Baseline Population Loaded:** **{baseline_pop:,}** individuals (last recorded in {baseline_year}).")
-        st.caption("💡 *Note: Free-text baseline editing is disabled to protect modeling security and prevent grant budget manipulation.*")
     else:
         st.warning(f"ℹ️ **Baseline Lookup:** No identical historical matches found. Using standard default anchor value: **{baseline_pop:,}** individuals.")
 
@@ -532,10 +436,18 @@ with col2:
         predicted_pop = st.session_state.predicted_pop
         
         st.success("🎉 Forecast Generated Successfully!")
-        st.metric(
-            label="👥 Predicted Target Refugee Population Segment", 
-            value=f"{predicted_pop:,} individuals"
-        )
+        st.metric(label="👥 Predicted Target Refugee Population Segment", value=f"{predicted_pop:,} individuals")
+        
+        # =====================================================
+        # NEW: Comparison Bar Chart Visual 📊
+        # =====================================================
+        st.write("📈 **Trajectory Growth Comparison**")
+        comparison_df = pd.DataFrame({
+            "Stage": [f"Historical Baseline ({baseline_year})", f"AI Forecast ({year})"],
+            "Population": [baseline_pop, predicted_pop]
+        }).set_index("Stage")
+        
+        st.bar_chart(comparison_df)
         
         st.markdown("---")
         st.subheader("📦 Projected Resource Requirements")
@@ -562,48 +474,15 @@ with col2:
         with m_col1:
             st.metric(label="🏠 Shelters Needed (Est.)", value=f"{estimated_households:,}")
             if school_children is not None:
-                st.metric(label="🎒 School-age Children in Cohort", value=f"{school_children:,}")
-            else:
-                st.caption("⚠️ School-age figures are hidden for 'all' mixed age bands.")
+                st.metric(label="🎒 School-age Children", value=f"{school_children:,}")
         with m_col2:
-            st.metric(label="🍚 Monthly Food Requirement", value=f"{monthly_food_tonnes:.2f} MT")
-            st.metric(label="🚑 Healthcare Kits Needed", value=f"{health_kits:,}")
+            st.metric(label="🍚 Monthly Food", value=f"{monthly_food_tonnes:.2f} MT")
+            st.metric(label="🚑 Healthcare Kits", value=f"{health_kits:,}")
         with m_col3:
-            st.metric(label="💧 Daily Water Requirement", value=f"{water_liters:,} L")
+            st.metric(label="💧 Daily Water", value=f"{water_liters:,} L")
 
         st.markdown(f"**Recommended Health Kit Type:** {profile['health_kit_type']}")
         st.caption(profile["notes"])
-
-        st.info("""
-        💡 **Strategic Guidance:** These estimates map population counts to standard WHO, WFP, and Sphere Handbook humanitarian indicators to streamline camp deployment planning.
-        """)
-
-# =====================================================
-# Historical Trends Visualization Section (2022-2025 Focus)
-# =====================================================
-if history_loaded:
-    st.markdown("---")
-    st.subheader("📈 Historical Population Trend Analysis (2022 - 2025)")
-    
-    filtered_df = history_df[
-        (history_df["origin_location_code"] == origin) &
-        (history_df["population_group"] == population_group) &
-        (history_df["gender"] == gender) &
-        (history_df["age_range"] == age_range) &
-        (history_df["year"] >= 2022)
-    ]
-    
-    if not filtered_df.empty:
-        yearly_trend = filtered_df.groupby("year")["population"].sum().reset_index()
-        yearly_trend = yearly_trend.sort_values("year")
-        
-        yearly_trend["year"] = yearly_trend["year"].astype(str)
-        chart_data = yearly_trend.set_index("year")
-        
-        st.line_chart(chart_data, y="population", width="stretch")
-        st.caption(f"📉 *Showing recorded historical population timeline from 2022 to 2025 for {gender} cohorts aged {age_range} from {origin}.*")
-    else:
-        st.info("ℹ️ No historical population records exist in the database from 2022-2025 for this specific parameter combination.")
 
 # =====================================================
 # Clean, Non-Sticky Footer (Perfect for Mobile Screens)
