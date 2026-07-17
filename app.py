@@ -332,7 +332,6 @@ To provide humanitarian organizations with a proactive tool for estimating local
 This dashboard uses a trained **Feature Tokenizer Transformer (FT-Transformer)** deep learning model to forecast refugee population trends in Kenya and project crucial logistics requirements like daily water, food distribution, and emergency housing.
 """)
 
-# Clean, user-friendly status message replacing developer messages
 st.info("💡 **System Ready** — Select your forecast parameters below and click **Generate Forecast**.")
 st.markdown("---")
 
@@ -345,10 +344,10 @@ with st.expander("📖 User Manual & Quick Terminology Glossary", expanded=False
     with t_col1:
         st.markdown("""
         ### **How to generate forecasts:**
-        1. **Select Demographic Parameters:** Pick the Country of Origin, Population Group, Gender, and Age band you want to forecast.
-        2. **Specify Forecast Timeline:** Set the Target Forecast Year (2026–2030) using the slider.
-        3. **Refine Geopolitical Controls:** Toggle administrative factors like **HRP** and **GHO** if conditions are changing.
-        4. **Set Baseline Population:** The system defaults to **5,000**. Feel free to enter any custom population scale.
+        1. **Select Demographic Parameters:** Pick the Country of Origin, Population Group, Gender, and Age band.
+        2. **Automatic Baseline Verification:** The system automatically references the *verified historical database* to fetch the most recent starting population for that cohort.
+        3. **Specify Forecast Timeline:** Set the Target Forecast Year (2026–2030) using the slider.
+        4. **Refine Geopolitical Controls:** Toggle administrative factors like **HRP** and **GHO** if conditions are changing.
         5. **Run Prediction:** Click **🔮 Generate Forecast** to query the deep learning model.
         """)
     with t_col2:
@@ -429,16 +428,36 @@ with col1:
     )
 
 with col2:
-    st.subheader("📊 Model Inference & Resource Forecasting")
+    st.subheader("📊 Dynamic Baseline Lookup")
     
-    baseline_pop = st.number_input(
-        "Current Baseline Population (Historical)", 
-        min_value=0, 
-        max_value=1000000, 
-        value=5000, 
-        step=100,
-        help="Baseline Population: Represents the starting size of this cohort. The deep learning model processes this baseline alongside indicators to scale its final forecast."
-    )
+    # Secure baseline calculation: locate the latest year's recorded population inside the dataset
+    baseline_pop = 1000  # Default safe fall-back value
+    is_lookup_verified = False
+    
+    if history_loaded and (history_df is not None):
+        matched_cohorts = history_df[
+            (history_df["origin_location_code"] == origin) &
+            (history_df["population_group"] == population_group) &
+            (history_df["gender"] == gender) &
+            (history_df["age_range"] == age_range)
+        ]
+        
+        if not matched_cohorts.empty:
+            # Anchor to the absolute most recent year's data recorded in Kenya_Refugee.csv
+            latest_record = matched_cohorts.sort_values(by="year", ascending=False).iloc[0]
+            baseline_pop = int(latest_record["population"])
+            baseline_year = int(latest_record["year"])
+            is_lookup_verified = True
+    
+    # Display the found verification metrics transparently
+    if is_lookup_verified:
+        st.success(f"🔒 **Verified Baseline Population Loaded:** **{baseline_pop:,}** individuals (last recorded in {baseline_year}).")
+        st.caption("💡 *Note: Free-text baseline editing is disabled to protect modeling security and prevent grant budget manipulation.*")
+    else:
+        st.warning(f"ℹ️ **Baseline Lookup:** No identical historical matches found. Using standard default anchor value: **{baseline_pop:,}** individuals.")
+
+    st.markdown("---")
+    st.subheader("🤖 Model Inference & Resource Forecasting")
 
     if age_range == "0-4":
         min_age, max_age = 0.0, 4.0
@@ -566,9 +585,9 @@ if history_loaded:
     st.markdown("---")
     st.subheader("📈 Historical Population Trend Analysis (2022 - 2025)")
     
-    # Filter for active historical records from 2022 onwards to clean up empty layout sections
     filtered_df = history_df[
         (history_df["origin_location_code"] == origin) &
+        (history_df["population_group"] == population_group) &
         (history_df["gender"] == gender) &
         (history_df["age_range"] == age_range) &
         (history_df["year"] >= 2022)
@@ -578,7 +597,6 @@ if history_loaded:
         yearly_trend = filtered_df.groupby("year")["population"].sum().reset_index()
         yearly_trend = yearly_trend.sort_values("year")
         
-        # Format the year cleanly so it displays without decimal dots on the chart axis
         yearly_trend["year"] = yearly_trend["year"].astype(str)
         chart_data = yearly_trend.set_index("year")
         
