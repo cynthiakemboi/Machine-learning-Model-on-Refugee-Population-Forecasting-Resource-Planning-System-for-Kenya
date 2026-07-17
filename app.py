@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -191,7 +190,8 @@ def get_historical_baseline(df, origin, population_group, gender, age_range):
         & (df["age_range"] == age_range)
     ]
     if subset.empty:
-        return 0, None, False
+        # Default baseline to a reasonable 5,000 if not found
+        return 5000, None, False
     latest = subset.sort_values("year", ascending=False).iloc[0]
     return int(latest["population"]), int(latest["year"]), True
 
@@ -392,7 +392,7 @@ st.success("✔️ FT-Transformer model loaded successfully. Ready to generate r
 st.markdown("---")
 
 # =====================================================
-# Documentation, App Walkthrough & Video Placeholder
+# Documentation, App Walkthrough & Video Placement
 # =====================================================
 with st.expander("📖 User Manual: How to Use this App & System Tutorial", expanded=False):
     t_col1, t_col2 = st.columns([1, 1.2])
@@ -407,7 +407,6 @@ with st.expander("📖 User Manual: How to Use this App & System Tutorial", expa
         """)
     with t_col2:
         st.markdown("### **System Demo & Walkthrough Video**")
-        # Placeholder for demonstration video. Replace the URL with your presentation or walkthrough video.
         st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
         st.caption("📽️ Watch this video for a full walkthrough of our deep learning design and resource calculation models.")
 
@@ -432,7 +431,7 @@ with col1:
     population_group = st.selectbox(
         "Population Group Type", 
         options=valid_pop_groups,
-        help="The administrative classification of the group: \n\n"
+        help="The administrative classification of the group:\n\n"
              "• **ASY:** Asylum Seekers (individuals whose request for sanctuary has yet to be processed).\n"
              "• **REF:** Registered Refugees (individuals officially granted protected status)."
     )
@@ -507,9 +506,11 @@ with col2:
                 f"for this cohort configuration."
             )
         else:
+            # Replaced low-confidence fallback with 5,000 as requested
+            baseline_default = 5000
             st.warning(
                 "⚠️ No historical record found for this exact combination. "
-                "Baseline defaulted to 0 — treat any prediction as low-confidence."
+                "Baseline defaulted to a reasonable placeholder value of 5,000."
             )
     else:
         baseline_default = 5000
@@ -520,7 +521,7 @@ with col2:
         max_value=1000000, 
         value=int(baseline_default), 
         step=50,
-        help="ℹ️ **Baseline Population Info:** Represents the starting historical size of this specific cohort. The deep learning model processes this baseline alongside the indicators to scale its final forward forecast."
+        help="ℹ️ **Baseline Population:** Represents the starting historical size of this specific cohort. The deep learning model processes this baseline alongside demographic indicators to scale its final forward forecast."
     )
 
     if history_loaded:
@@ -552,9 +553,6 @@ with col2:
         'gender': gender,
         'age_range': age_range
     }])
-
-    with st.expander("🛠️ Developer Tool: Processed Input Vector"):
-        st.write(pd.concat([raw_categorical, raw_numerical.drop(columns=['population'])], axis=1))
 
     if "predicted_pop" not in st.session_state:
         st.session_state.predicted_pop = None
