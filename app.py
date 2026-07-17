@@ -332,7 +332,8 @@ To provide humanitarian organizations with a proactive tool for estimating local
 This dashboard uses a trained **Feature Tokenizer Transformer (FT-Transformer)** deep learning model to forecast refugee population trends in Kenya and project crucial logistics requirements like daily water, food distribution, and emergency housing.
 """)
 
-st.success("✔️ FT-Transformer model loaded successfully. Ready to generate refugee population forecasts.")
+# Clean, user-friendly status message replacing developer messages
+st.info("💡 **System Ready** — Select your forecast parameters below and click **Generate Forecast**.")
 st.markdown("---")
 
 
@@ -587,27 +588,14 @@ if history_loaded:
         st.info("ℹ️ No historical population records exist in the database from 2022-2025 for this specific parameter combination.")
 
 # =====================================================
-# Custom Styled Sticky Footer
+# Clean, Non-Sticky Footer (Perfect for Mobile Screens)
 # =====================================================
+st.markdown("---")
 st.markdown(
     """
-    <style>
-    .footer {
-        position: fixed;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        background-color: #f1f3f6;
-        color: #31333F;
-        text-align: center;
-        padding: 10px 0px;
-        font-size: 14px;
-        border-top: 1px solid #e0e0e0;
-        z-index: 999;
-    }
-    </style>
-    <div class="footer">
-        <p>🌍 <b>Refugee Population Forecasting & Resource Planning System</b> | Developed as a Data Science Capstone Project by Team <b>XG BOOST BUSTERS</b> © 2026</p>
+    <div style="text-align: center; padding: 20px 0px; background-color: transparent; font-size: 14px; color: #555555; border-top: 1px solid #e0e0e0; margin-top: 40px; margin-bottom: 20px;">
+        🌍 <b>Refugee Population Forecasting & Resource Planning System</b><br>
+        Developed as a Data Science Capstone Project by Team <b>XG BOOST BUSTERS</b> © 2026
     </div>
     """,
     unsafe_allow_html=True
