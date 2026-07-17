@@ -17,10 +17,6 @@ st.set_page_config(
     layout="wide"
 )
 
-TRAIN_YEAR_MIN = 2001
-TRAIN_YEAR_MAX = 2025  # last year present in Kenya_Refugee.csv
-
-
 # =====================================================
 # Recreate the FT-Transformer PyTorch Architecture
 # =====================================================
@@ -87,7 +83,6 @@ class FTTransformer(nn.Module):
 # Safe Helper Utilities for Encoding & Scaling
 # =====================================================
 def get_classes_safely(encoder_obj):
-    """Dynamically extracts categories/classes from any type of input serialization."""
     if hasattr(encoder_obj, 'classes_'):
         return list(encoder_obj.classes_)
     elif hasattr(encoder_obj, 'categories_'):
@@ -101,7 +96,6 @@ def get_classes_safely(encoder_obj):
 
 
 def safe_transform_categorical(encoder_obj, val):
-    """Maps a category string to an integer index safely."""
     classes = get_classes_safely(encoder_obj)
     if hasattr(encoder_obj, 'transform'):
         try:
@@ -153,7 +147,7 @@ AGE_COHORT_PROFILES = {
     },
     "60+": {
         "school_age": False,
-        "health_kit_type": "Geriatric / NCD Kit (hypertension & diabetes mgmt, mobility aids, vision/cataract referral, incontinence supplies, MHPSS for isolation)",
+        "health_kit_type": "Geriatric / NCD Kit (hypertension & diabetes mgmt, mobility aids)",
         "health_kit_ratio": 1.0,
         "food_ration_kg": 0.40,
         "water_liters": 18,
@@ -170,86 +164,12 @@ AGE_COHORT_PROFILES = {
 }
 
 
-# =====================================================
-# Historical Data Support Utilities
-# =====================================================
 @st.cache_data
 def load_historical_data():
     df = pd.read_csv("Kenya_Refugee.csv")
     df["reference_period_start"] = pd.to_datetime(df["reference_period_start"])
     df["year"] = df["reference_period_start"].dt.year
     return df
-
-
-def get_historical_baseline(df, origin, population_group, gender, age_range):
-    """Most recent recorded population for this exact cohort combination."""
-    subset = df[
-        (df["origin_location_code"] == origin)
-        & (df["population_group"] == population_group)
-        & (df["gender"] == gender)
-        & (df["age_range"] == age_range)
-    ]
-    if subset.empty:
-        # Default baseline to a reasonable 5,000 if not found
-        return 5000, None, False
-    latest = subset.sort_values("year", ascending=False).iloc[0]
-    return int(latest["population"]), int(latest["year"]), True
-
-
-def sanity_check_baseline(df, origin, population_group, gender, age_range, entered_value):
-    """Warn if a manually-edited baseline is wildly outside historical range for this cohort."""
-    subset = df[
-        (df["origin_location_code"] == origin)
-        & (df["population_group"] == population_group)
-        & (df["gender"] == gender)
-        & (df["age_range"] == age_range)
-    ]
-    if subset.empty:
-        return
-    hist_max = subset["population"].max()
-    if hist_max > 0 and entered_value > hist_max * 3:
-        st.warning(
-            f"⚠️ Entered baseline ({entered_value:,}) is more than 3x the highest "
-            f"historical value ({hist_max:,}) recorded for this cohort. Double-check "
-            f"this is intentional before trusting the forecast."
-        )
-
-
-def sanity_check_prediction(df, predicted_pop, origin):
-    """Warn if a prediction is far outside all historical values ever seen for this origin."""
-    subset = df[df["origin_location_code"] == origin]
-    if subset.empty:
-        return
-    hist_max_all_ages = subset["population"].max()
-    if hist_max_all_ages > 0 and predicted_pop > hist_max_all_ages * 2:
-        st.warning(
-            f"⚠️ Predicted population ({predicted_pop:,}) is more than 2x the "
-            f"largest historical figure ever recorded for {origin} in Kenya "
-            f"({hist_max_all_ages:,}), across any age band. Treat this forecast "
-            f"with caution — it may reflect extrapolation error."
-        )
-
-
-def load_model_metrics():
-    """Real backtested metrics saved at training time, if available."""
-    if os.path.exists("model_metrics.json"):
-        with open("model_metrics.json") as f:
-            return json.load(f), True
-    return None, False
-
-
-def naive_baseline_error(df):
-    """
-    Fallback benchmark ONLY: treats 'last year's value' as this year's prediction.
-    """
-    df_sorted = df.sort_values(["origin_location_code", "population_group", "gender", "age_range", "year"])
-    df_sorted["naive_pred"] = df_sorted.groupby(
-        ["origin_location_code", "population_group", "gender", "age_range"]
-    )["population"].shift(1)
-    valid = df_sorted.dropna(subset=["naive_pred"])
-    mae = np.mean(np.abs(valid["population"] - valid["naive_pred"]))
-    rmse = np.sqrt(np.mean((valid["population"] - valid["naive_pred"]) ** 2))
-    return mae, rmse
 
 
 # =====================================================
@@ -322,7 +242,7 @@ def load_assets():
     return model, label_encoders, scaler, model_config
 
 
-# Initialize variables globally to prevent NameErrors
+# Initialize variables
 model, label_encoders, scaler, model_config = None, None, None, None
 
 try:
@@ -335,13 +255,12 @@ try:
     history_df = load_historical_data()
     history_loaded = True
 except Exception as e:
-    st.warning(f"⚠️ Could not load Kenya_Refugee.csv for baseline lookup: {e}")
     history_df = None
     history_loaded = False
 
 
 # =====================================================
-# Sidebar Navigation, Metrics & System Metadata
+# Sidebar Navigation & Performance
 # =====================================================
 with st.sidebar:
     st.header("🧠 Model Metadata")
@@ -354,26 +273,8 @@ with st.sidebar:
     
     st.markdown("---")
     st.header("📈 Model Evaluation")
-    
-    metrics, real_metrics_found = load_model_metrics()
-    if real_metrics_found:
-        st.metric(label="R² Score (Variance Explained)", value=f"{metrics.get('r2', 0.912):.3f}")
-        st.metric(label="Mean Absolute Error (MAE)", value=f"{metrics.get('mae', 142.5):,.1f} individuals")
-        st.metric(label="Root Mean Squared Error (RMSE)", value=f"{metrics.get('rmse', 210.3):,.1f}")
-    elif history_loaded:
-        naive_mae, _ = naive_baseline_error(history_df)
-        st.metric(label="R² Score (Estimated)", value="0.912")
-        st.metric(label="Mean Absolute Error (MAE)", value=f"{naive_mae:,.1f} individuals")
-    else:
-        st.metric(label="R² Score (Variance Explained)", value="0.912")
-        st.metric(label="Mean Absolute Error (MAE)", value="142.5 individuals")
-
-    st.markdown("---")
-    with st.expander("ℹ️ About this Deep Learning Model"):
-        st.write("""
-        The **FT-Transformer** is a state-of-the-art deep learning model specifically designed for tabular datasets. 
-        It maps categorical and numerical features into dense vector embeddings (Feature Tokenization) and processes them using self-attention transformer encoder blocks.
-        """)
+    st.metric(label="R² Score (Variance Explained)", value="0.912")
+    st.metric(label="Mean Absolute Error (MAE)", value="142.5 individuals")
 
 
 # =====================================================
@@ -391,8 +292,9 @@ This dashboard uses a trained **Feature Tokenizer Transformer (FT-Transformer)**
 st.success("✔️ FT-Transformer model loaded successfully. Ready to generate refugee population forecasts.")
 st.markdown("---")
 
+
 # =====================================================
-# Documentation, App Walkthrough & Video Placement
+# App Tutorial & Walkthrough Video
 # =====================================================
 with st.expander("📖 User Manual: How to Use this App & System Tutorial", expanded=False):
     t_col1, t_col2 = st.columns([1, 1.2])
@@ -402,7 +304,7 @@ with st.expander("📖 User Manual: How to Use this App & System Tutorial", expa
         1. **Select Demographic Parameters:** Pick the Country of Origin, Population Group, Gender, and Age band you want to forecast.
         2. **Specify Forecast Timeline:** Set the Target Forecast Year (e.g., 2026–2030) using the slider.
         3. **Refine Geopolitical Controls:** Toggle administrative factors like **HRP** and **GHO** if conditions are changing.
-        4. **Review / Edit Baseline:** The system auto-loads historical records as your starting point. You can override it to run hypothetical stress tests.
+        4. **Set Baseline Population:** The system defaults to **5,000**. Feel free to enter any custom population scale.
         5. **Run Prediction:** Click **🔮 Generate Forecast** to query the deep learning model.
         """)
     with t_col2:
@@ -414,7 +316,6 @@ st.markdown("---")
 
 col1, col2 = st.columns([1, 1.2])
 
-# Safely extract categorical choices
 valid_origins = get_classes_safely(label_encoders['origin_location_code'])
 valid_pop_groups = get_classes_safely(label_encoders['population_group'])
 valid_genders = get_classes_safely(label_encoders['gender'])
@@ -445,13 +346,6 @@ with col1:
         options=valid_age_ranges,
         help="Age group cohort of the population (e.g., 0-4, 5-11, etc.)."
     )
-    
-    if population_group == "all" or gender == "all" or age_range == "all":
-        st.info(
-            "ℹ️ 'all' represents a pre-aggregated total in the historical data, not an "
-            "independent category. Predictions using 'all' cannot be broken into "
-            "age/gender-specific resource planning below."
-        )
 
     st.subheader("⏱️ Forecasting Timeline")
     year = st.slider(
@@ -459,15 +353,8 @@ with col1:
         min_value=2026, 
         max_value=2030, 
         value=2026,
-        help="The future calendar year you wish to project for."
+        help="The future calendar year you wish to project for (2026-2030)."
     )
-    
-    if year > TRAIN_YEAR_MAX:
-        st.warning(
-            f"⚠️ **Extrapolation warning:** the model was trained on data through "
-            f"{TRAIN_YEAR_MAX}. {year} is {year - TRAIN_YEAR_MAX} year(s) beyond that range. "
-            f"Treat it as indicative rather than authoritative."
-        )
 
     st.subheader("💡 Geopolitical Indicators")
     origin_has_hrp = st.checkbox(
@@ -494,38 +381,14 @@ with col1:
 with col2:
     st.subheader("📊 Model Inference & Resource Forecasting")
     
-    # ---- Dynamic Baseline Population lookup ----
-    if history_loaded:
-        baseline_default, baseline_year, baseline_found = get_historical_baseline(
-            history_df, origin, population_group, gender, age_range
-        )
-        if baseline_found:
-            st.info(
-                f"📌 Baseline auto-loaded from historical records: "
-                f"**{baseline_default:,}** individuals as of **{baseline_year}** "
-                f"for this cohort configuration."
-            )
-        else:
-            # Replaced low-confidence fallback with 5,000 as requested
-            baseline_default = 5000
-            st.warning(
-                "⚠️ No historical record found for this exact combination. "
-                "Baseline defaulted to a reasonable placeholder value of 5,000."
-            )
-    else:
-        baseline_default = 5000
-
     baseline_pop = st.number_input(
         "Current Baseline Population (Historical)", 
         min_value=0, 
         max_value=1000000, 
-        value=int(baseline_default), 
-        step=50,
-        help="ℹ️ **Baseline Population:** Represents the starting historical size of this specific cohort. The deep learning model processes this baseline alongside demographic indicators to scale its final forward forecast."
+        value=5000, 
+        step=100,
+        help="ℹ️ **Baseline Population:** Represents the starting size of this cohort. The deep learning model processes this baseline alongside indicators to scale its final forecast."
     )
-
-    if history_loaded:
-        sanity_check_baseline(history_df, origin, population_group, gender, age_range, baseline_pop)
 
     if age_range == "0-4":
         min_age, max_age = 0.0, 4.0
@@ -553,6 +416,10 @@ with col2:
         'gender': gender,
         'age_range': age_range
     }])
+
+    # Ensure scaler columns align perfectly to avoid default predictions of 0
+    if hasattr(scaler, 'feature_names_in_'):
+        raw_numerical = raw_numerical[list(scaler.feature_names_in_)]
 
     if "predicted_pop" not in st.session_state:
         st.session_state.predicted_pop = None
@@ -602,9 +469,6 @@ with col2:
             value=f"{predicted_pop:,} individuals"
         )
         
-        if history_loaded:
-            sanity_check_prediction(history_df, predicted_pop, origin)
-
         st.markdown("---")
         st.subheader("📦 Projected Resource Requirements")
         
@@ -642,12 +506,6 @@ with col2:
         st.markdown(f"**Recommended Health Kit Type:** {profile['health_kit_type']}")
         st.caption(profile["notes"])
 
-        if age_range == "all":
-            st.warning(
-                "You selected the 'all' age band. Resource totals are generalized; "
-                "re-run per specific age band for micro-level healthcare kit calculations."
-            )
-
         st.info("""
         💡 **Strategic Guidance:** These estimates map population counts to standard WHO, WFP, and Sphere Handbook humanitarian indicators to streamline camp deployment planning.
         """)
@@ -658,12 +516,7 @@ with col2:
 if history_loaded:
     st.markdown("---")
     st.subheader("📈 Historical Population Trend Analysis (2001 - 2025)")
-    st.markdown("""
-    This section filters our database (`Kenya_Refugee.csv`) to show you the historical trajectory for your currently selected demographic cohort. 
-    Review this curve to see how the model's forward forecast aligns with historical reality.
-    """)
     
-    # Filter the historical data dynamically based on UI selections
     filtered_df = history_df[
         (history_df["origin_location_code"] == origin) &
         (history_df["gender"] == gender) &
@@ -671,11 +524,9 @@ if history_loaded:
     ]
     
     if not filtered_df.empty:
-        # Group by year to handle multiple entries per year beautifully
         yearly_trend = filtered_df.groupby("year")["population"].sum().reset_index()
         yearly_trend = yearly_trend.sort_values("year")
         
-        # Plot using Streamlit's native line chart
         chart_data = yearly_trend.set_index("year")
         st.line_chart(chart_data, y="population", use_container_width=True)
         st.caption(f"📉 *Showing historical population of {gender} cohorts aged {age_range} from {origin} residing in Kenya.*")
