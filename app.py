@@ -379,7 +379,7 @@ To provide humanitarian organizations with a proactive tool for estimating local
 st.info("💡 **System Ready** — Select your forecast parameters below and click **Generate Forecast**.")
 st.markdown("---")
 
-# App Tutorial & Quick Terminology Glossary
+#App Tutorial & Quick Terminology Glossary
 with st.expander("📖 User Manual & Quick Terminology Glossary", expanded=False):
     t_col1, t_col2 = st.columns([1, 1.2])
     with t_col1:
