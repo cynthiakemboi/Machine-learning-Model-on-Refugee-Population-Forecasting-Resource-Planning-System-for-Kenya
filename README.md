@@ -5,7 +5,7 @@ A machine-learning system that forecasts refugee and asylum-seeker populations i
 ## Live Application
 
 **Streamlit App:**  
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://gsmt43hnnpxa8rxc293o8f.streamlit.app/)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://uvor9ckrbvpbmc7lz65p9z.streamlit.app/)
 
 ## Project Overview
 
@@ -80,6 +80,8 @@ The project follows the **CRISP-DM** methodology:
 6. Model development
 7. Model evaluation
 8. Deployment
+9. Business insights, Limitations and Recommendations
+10. Conclusion
 
 ## Key Findings
 
