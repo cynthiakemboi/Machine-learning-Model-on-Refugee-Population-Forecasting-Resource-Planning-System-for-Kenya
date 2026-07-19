@@ -17,9 +17,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# =====================================================
+
 # Recreate the FT-Transformer PyTorch Architecture
-# =====================================================
 class NumericalTokenizer(nn.Module):
     def __init__(self, num_features, embed_dim):
         super().__init__()
@@ -79,9 +78,8 @@ class FTTransformer(nn.Module):
         return self.mlp_head(flat_out)
 
 
-# =====================================================
+
 # Safe Helper Utilities for Encoding & Scaling
-# =====================================================
 def get_classes_safely(encoder_obj):
     if hasattr(encoder_obj, 'classes_'):
         return list(encoder_obj.classes_)
@@ -108,10 +106,10 @@ def safe_transform_categorical(encoder_obj, val):
         return 0
 
 
-# =====================================================
+
 # Age-cohort-specific resource planning profiles
 # (WHO / UNHCR / Sphere-Handbook aligned)
-# =====================================================
+
 AGE_COHORT_PROFILES = {
     "0-4": {
         "school_age": False,
@@ -183,9 +181,8 @@ def load_model_metrics():
     return None, False
 
 
-# =====================================================
+
 # Safe Asset Loader
-# =====================================================
 @st.cache_resource
 def load_assets():
     try:
@@ -269,10 +266,7 @@ except Exception as e:
     history_df = None
     history_loaded = False
 
-
-# =====================================================
 # Sidebar Navigation & Performance
-# =====================================================
 with st.sidebar:
     st.header("🧠 Model Metadata")
     st.markdown("""
@@ -319,10 +313,7 @@ with st.sidebar:
             help="Penalizes larger prediction deviations heavier than MAE, helping plan backup/buffer resources."
         )
 
-
-# =====================================================
 # Main Application Content
-# =====================================================
 st.title("🌍 AI-Powered Refugee Population Forecasting System")
 
 st.markdown("""
@@ -334,10 +325,7 @@ To provide humanitarian organizations with a proactive tool for estimating local
 st.info("💡 **System Ready** — Select your forecast parameters below and click **Generate Forecast**.")
 st.markdown("---")
 
-
-# =====================================================
 # App Tutorial & Quick Terminology Glossary
-# =====================================================
 with st.expander("📖 User Manual & Quick Terminology Glossary", expanded=False):
     t_col1, t_col2 = st.columns([1, 1.2])
     with t_col1:
@@ -571,9 +559,8 @@ with col2:
         💡 **Strategic Guidance:** These estimates map population counts to standard WHO, WFP, and Sphere Handbook humanitarian indicators to streamline camp deployment planning.
         """)
 
-# =====================================================
+
 # Historical Trends Visualization Section (2022-2025 Focus)
-# =====================================================
 if history_loaded:
     st.markdown("---")
     st.subheader("📈 Historical Population Trend Analysis (2022 - 2025)")
@@ -599,9 +586,7 @@ if history_loaded:
     else:
         st.info("ℹ️ No historical population records exist in the database from 2022-2025 for this specific parameter combination.")
 
-# =====================================================
 # Clean, Non-Sticky Footer (Perfect for Mobile Screens)
-# =====================================================
 st.markdown("---")
 st.markdown(
     """
